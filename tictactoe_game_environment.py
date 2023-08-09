@@ -9,6 +9,9 @@ class TicTacToeGameEnvironment(GameEnvironment):
 
     def __init__(self, board_size=3):
         super().__init__("Tic Tac Toe")
+        self._board_size = board_size
+        self._game_board = GridMap(board_size, board_size, None)
+        self._player_turn = 'X' #X always starts
 
     # TODO
     # implement the abstract method add_player
@@ -20,7 +23,14 @@ class TicTacToeGameEnvironment(GameEnvironment):
         assert isinstance(player, Agent), "The parameter player must be an instance of a subclass of the class Agent"
         assert len(self._players) < 2, "It is not possible to add more than 2 players for this game."
 
-        pass
+        if len(self._players) == 0:
+            marker = 'X'
+        else:
+            marker = 'O'
+        
+        self._players[marker] = player
+        
+        return marker
 
     # TODO
     # implement the abstract method get_game_state
@@ -31,7 +41,11 @@ class TicTacToeGameEnvironment(GameEnvironment):
     # You may first create properties in the constructor function __init__
     # to store the game board and the current turn
     def get_game_state(self):
-        pass
+        game_state = {
+            'game-board' : self._game_board.copy(),
+            'player-turn' : self._player_turn
+        }
+        return game_state
     
     # TODO
     # implement the abstract method get_percepts
@@ -41,7 +55,11 @@ class TicTacToeGameEnvironment(GameEnvironment):
     # 'game-board-sensor' -> the 'game-board' value from the current game state
     # 'turn-taking-indicator' -> the 'player-turn' value from the current game state
     def get_percepts(self):
-        pass
+        game_state = self.get_game_state()
+        return {
+            'game-board-sensor': game_state['game-board'],
+            'turn-taking-indicator' : game_state['player-turn']
+        }
 
     # TODO
     # implement the abstract method get_legal_actions
@@ -52,8 +70,14 @@ class TicTacToeGameEnvironment(GameEnvironment):
     # An action is legal in a given game state if the game board cell 
     # for that action is free from marks
     def get_legal_actions(game_state):
-        pass
+        legal_actions = []
+        game_board = game_state['game-board']
+        empty_cells = game_board.find_value(None)
+        for empty_cell in empty_cells:
+            legal_actions.append('mark-{0}-{1}'.format(empty_cell[0], empty_cell[1]))
 
+        return legal_actions
+    
     # TODO
     # implement the abstract method transition_result
     # This method is a static method (i.e. we do not have access to self
@@ -61,7 +85,23 @@ class TicTacToeGameEnvironment(GameEnvironment):
     # It takes a game_state and an action to perform as input and it returns
     # the new game state.
     def transition_result(game_state, action):
-        pass
+        legal_actions = TicTacToeGameEnvironment.get_legal_actions(game_state)
+        if action not in legal_actions:
+            raise(IllegalMove('The action {0} is not a legal move for the given game state {1}.'.format(action, game_state.get_map())))
+        
+        marker = TicTacToeGameEnvironment.turn(game_state)
+
+        tokens = action.split('-')
+        x, y = (int(tokens[1]), int(tokens[2]))
+        new_game_board = game_state['game-board'].copy()
+        new_game_board.set_item_value(x,y, marker)
+
+        new_game_state = {
+            'game-board': new_game_board,
+            'player-turn': 'O' if game_state['player-turn'] == 'X' else 'X'
+        }
+
+        return new_game_state
     
     # TODO
     # implement the abstract method state_transition
@@ -75,8 +115,13 @@ class TicTacToeGameEnvironment(GameEnvironment):
     # transition_result we just implemented
     def state_transition(self, agent_actuators):
         assert agent_actuators['marker'] is not None, "During a turn, the player must have set the 'marker' actuator value to a coordinate (x, y) of the game board where to place the marker."
-        
-        pass
+        gs = self.get_game_state()
+        x, y = agent_actuators['marker']
+        action = 'mark-{0}-{1}'.format(x, y)
+        new_gs = TicTacToeGameEnvironment.transition_result(gs, action)
+
+        self._player_turn = new_gs['player-turn']
+        self._game_board = new_gs['game-board'].copy()
     
     # This method is a static method (i.e. we do not have access to self
     # and it can only be accessed via the class TicTacToeGameEnvironment)
@@ -119,7 +164,11 @@ class TicTacToeGameEnvironment(GameEnvironment):
     # In this game, a state is terminal if there are no more legal actions
     # or if there is a winner.
     def is_terminal(game_state):
-        pass
+        remaining_actions = TicTacToeGameEnvironment.get_legal_actions(game_state)
+        winner = TicTacToeGameEnvironment.get_winner(game_state)
+
+        return len(remaining_actions) == 0 or winner is not None
+        
 
     # TODO
     # implement the abstract method payoff
@@ -131,5 +180,12 @@ class TicTacToeGameEnvironment(GameEnvironment):
     # if there is not a winner yet (or there is a tie) we return 0
     # In other games the payoff function may be more complex
     def payoff(game_state, player_name):
-        pass
+        winner = TicTacToeGameEnvironment.get_winner(game_state)
+        if winner is None:
+            return 0
+        elif winner == player_name:
+            return 1
+        else:
+            return -1
+
     
